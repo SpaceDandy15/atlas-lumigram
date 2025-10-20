@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
@@ -18,7 +19,7 @@ export default function RootLayout() {
   });
 
   // TEMP: simulate unauthenticated state for Task 2
-  const [isAuthenticated] = useState(false); // <-- hard-coded for now
+  const [isAuthenticated] = useState(false); // hard-coded for now
 
   useEffect(() => {
     if (loaded) {
@@ -36,18 +37,20 @@ export default function RootLayout() {
         <Stack.Screen key="login" name="login" />,
         <Stack.Screen key="register" name="register" />,
       ]
-    : [
-        <Stack.Screen key="tabs" name="(tabs)" />,
-      ];
+    : [<Stack.Screen key="tabs" name="(tabs)" />];
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {screens}
-        {/* Fallback screen */}
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    // Wrap everything in GestureHandlerRootView for gestures to work
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          {screens}
+
+          {/* Fallback screen */}
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
