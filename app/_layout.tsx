@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -17,6 +17,9 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
+  // TEMP: simulate unauthenticated state for Task 2
+  const [isAuthenticated] = useState(false); // <-- hard-coded for now
+
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
@@ -27,17 +30,21 @@ export default function RootLayout() {
     return null;
   }
 
+  // Build the stack screens based on auth state
+  const screens = !isAuthenticated
+    ? [
+        <Stack.Screen key="login" name="login" />,
+        <Stack.Screen key="register" name="register" />,
+      ]
+    : [
+        <Stack.Screen key="tabs" name="(tabs)" />,
+      ];
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Default unauthenticated screens */}
-        <Stack.Screen name="login" />
-        <Stack.Screen name="register" />
-
-        {/* Authenticated tab layout */}
-        <Stack.Screen name="(tabs)" />
-
-        {/* Fallback */}
+        {screens}
+        {/* Fallback screen */}
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
