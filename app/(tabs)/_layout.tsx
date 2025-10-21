@@ -14,15 +14,13 @@ export default function TabLayout() {
 
   // Small logout button component for header
   const LogoutButton = () => (
-    <Pressable
-      onPress={() => router.replace('/login')}
-      style={{ marginRight: 15 }}
-    >
-      <Text style={{ color: Colors[colorScheme ?? 'light'].tint, fontWeight: 'bold' }}>
-        Logout
-      </Text>
-    </Pressable>
-  );
+  <Pressable
+    onPress={() => router.replace('/login')}
+    style={{ marginRight: 15 }}
+  >
+    <IconSymbol size={24} name="rectangle.portrait.and.arrow.right.fill" color={Colors[colorScheme ?? 'light'].tint} />
+  </Pressable>
+);
 
   return (
     <Tabs
