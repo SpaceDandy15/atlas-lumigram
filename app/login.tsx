@@ -9,7 +9,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome Back</Text>
+      <Text style={styles.title}>Login</Text>
 
       <TextInput
         style={styles.input}

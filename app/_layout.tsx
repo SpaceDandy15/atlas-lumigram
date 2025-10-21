@@ -6,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -18,8 +17,8 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  // TEMP: simulate unauthenticated state for Task 2
-  const [isAuthenticated] = useState(false); // hard-coded for now
+  // Hard-coded auth state (for now)
+  const [isAuthenticated] = useState(false);
 
   useEffect(() => {
     if (loaded) {
@@ -27,28 +26,24 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
-
-  // Build the stack screens based on auth state
-  const screens = !isAuthenticated
-    ? [
-        <Stack.Screen key="login" name="login" />,
-        <Stack.Screen key="register" name="register" />,
-      ]
-    : [<Stack.Screen key="tabs" name="(tabs)" />];
+  if (!loaded) return null;
 
   return (
-    // Wrap everything in GestureHandlerRootView for gestures to work
+    // Required for gestures to work properly
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
-          {screens}
+          {/* Start with login/register */}
+          <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
 
-          {/* Fallback screen */}
+          {/* The main app tabs, shown after login */}
+          <Stack.Screen name="(tabs)" />
+
+          {/* Fallback not-found screen */}
           <Stack.Screen name="+not-found" />
         </Stack>
+
         <StatusBar style="auto" />
       </ThemeProvider>
     </GestureHandlerRootView>
