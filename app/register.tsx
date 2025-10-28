@@ -2,7 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'reac
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from 'firebaseConfig';
+import { auth } from '../firebaseConfig';
 
 export default function RegisterScreen() {
   const router = useRouter();
