@@ -1,6 +1,8 @@
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { Platform, Pressable, Text } from 'react-native';
+import { Platform, Pressable, Alert } from 'react-native';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../firebaseConfig'; // 👈 adjust path if different
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -10,17 +12,33 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter(); // for navigation
+  const router = useRouter();
 
   // Small logout button component for header
-  const LogoutButton = () => (
-  <Pressable
-    onPress={() => router.replace('/login')}
-    style={{ marginRight: 15 }}
-  >
-    <IconSymbol size={24} name="rectangle.portrait.and.arrow.right.fill" color={Colors[colorScheme ?? 'light'].tint} />
-  </Pressable>
-);
+  const LogoutButton = () => {
+    const handleLogout = async () => {
+      try {
+        await signOut(auth); // 👈 sign out user from Firebase
+        router.replace('/login'); // 👈 redirect to login screen
+      } catch (error: any) {
+        console.error(error);
+        Alert.alert('Logout Failed', error.message);
+      }
+    };
+
+    return (
+      <Pressable
+        onPress={handleLogout}
+        style={{ marginRight: 15 }}
+      >
+        <IconSymbol
+          size={24}
+          name="rectangle.portrait.and.arrow.right.fill"
+          color={Colors[colorScheme ?? 'light'].tint}
+        />
+      </Pressable>
+    );
+  };
 
   return (
     <Tabs
@@ -28,14 +46,13 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        headerRight: () => <LogoutButton />, // 👈 adds logout to header
+        headerRight: () => <LogoutButton />,
         tabBarStyle: Platform.select({
           ios: { position: 'absolute' },
           default: {},
         }),
       }}
     >
-      {/* Home tab */}
       <Tabs.Screen
         name="index"
         options={{
@@ -45,8 +62,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Search tab */}
       <Tabs.Screen
         name="explore"
         options={{
@@ -56,8 +71,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Add Post tab */}
       <Tabs.Screen
         name="add-post"
         options={{
@@ -67,8 +80,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Favorites tab */}
       <Tabs.Screen
         name="favorites"
         options={{
@@ -78,8 +89,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Profile tab */}
       <Tabs.Screen
         name="profile"
         options={{
