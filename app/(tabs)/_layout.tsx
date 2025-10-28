@@ -1,8 +1,10 @@
+// app/(tabs)/_layout.tsx
 import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, Pressable, Alert } from 'react-native';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../firebaseConfig'; // 👈 adjust path if different
+import { auth } from '../../firebaseConfig';
+import { useAuth } from '../../AuthProvider';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -13,13 +15,21 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const { user, loading } = useAuth();
 
-  // Small logout button component for header
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login');
+    }
+  }, [user, loading]);
+
+  // Small logout button component
   const LogoutButton = () => {
     const handleLogout = async () => {
       try {
-        await signOut(auth); // 👈 sign out user from Firebase
-        router.replace('/login'); // 👈 redirect to login screen
+        await signOut(auth);
+        router.replace('/login');
       } catch (error: any) {
         console.error(error);
         Alert.alert('Logout Failed', error.message);
@@ -27,10 +37,7 @@ export default function TabLayout() {
     };
 
     return (
-      <Pressable
-        onPress={handleLogout}
-        style={{ marginRight: 15 }}
-      >
+      <Pressable onPress={handleLogout} style={{ marginRight: 15 }}>
         <IconSymbol
           size={24}
           name="rectangle.portrait.and.arrow.right.fill"
@@ -39,6 +46,9 @@ export default function TabLayout() {
       </Pressable>
     );
   };
+
+  // If still loading auth state, render nothing (or a loader)
+  if (loading) return null;
 
   return (
     <Tabs
@@ -57,45 +67,35 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="magnifyingglass" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="magnifyingglass" color={color} />,
         }}
       />
       <Tabs.Screen
         name="add-post"
         options={{
           title: 'Add Post',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="plus.circle.fill" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="favorites"
         options={{
           title: 'Favorites',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="heart.fill" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'My Profile',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill" color={color} />
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>
