@@ -1,65 +1,95 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  Button, 
-  Image, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Keyboard, 
-  TouchableWithoutFeedback 
+import {
+  View,
+  Text,
+  TextInput,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Keyboard,
+  TouchableWithoutFeedback,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { storage, db } from '../../firebaseConfig';
+import { useAuth } from '../../AuthProvider';
 
 export default function AddPostScreen() {
-  // State to store the selected image URI
+  const { user } = useAuth();
   const [image, setImage] = useState<string | null>(null);
-  // State to store the caption text
   const [caption, setCaption] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // --- Function to handle selecting an image from camera roll
+  // Pick an image from gallery
   const pickImage = async () => {
-    // Ask for permission first
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Camera roll access is required.');
+        return;
+      }
 
-    if (!permissionResult.granted) {
-      alert('Permission to access camera roll is required!');
-      return;
-    }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'], // ✅ FIXED
+        allowsEditing: true,
+        quality: 0.7,
+      });
 
-    // Open the image picker
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-
-    // If user picked an image, update the state
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      if (!result.canceled) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('Error picking image:', err);
+      Alert.alert('Error', 'Something went wrong while selecting an image.');
     }
   };
 
-  // --- Function to handle "Save" button press (placeholder for now)
-  const handleSave = () => {
-    console.log('Post saved:', { image, caption });
-    alert('Post saved! (placeholder behavior)');
-  };
+  // Upload image and save post to Firestore
+  const handleSave = async () => {
+    if (!user) return Alert.alert('Not signed in', 'Please log in to post.');
+    if (!image) return Alert.alert('No image', 'Select an image before posting.');
 
-  // --- Function to reset image and caption
-  const handleReset = () => {
-    setImage(null);
-    setCaption('');
+    setLoading(true);
+
+    try {
+      // Convert image to blob
+      const response = await fetch(image);
+      const blob = await response.blob();
+
+      // Upload to Firebase Storage
+      const imageRef = ref(storage, `posts/${user.uid}_${Date.now()}.jpg`);
+      await uploadBytes(imageRef, blob);
+
+      // Get download URL
+      const downloadURL = await getDownloadURL(imageRef);
+
+      // Add post to Firestore
+      await addDoc(collection(db, 'posts'), {
+        imageUrl: downloadURL,
+        caption,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+      });
+
+      Alert.alert('Success', 'Post uploaded successfully!');
+      setImage(null);
+      setCaption('');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      Alert.alert('Upload failed', error.message || 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    // Dismiss the keyboard when tapping outside input fields
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
-        {/* --- Title at the top left corner --- */}
         <Text style={styles.title}>Add Post</Text>
 
-        {/* --- Touchable area to pick an image --- */}
         <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
           {image ? (
             <Image source={{ uri: image }} style={styles.image} />
@@ -68,7 +98,6 @@ export default function AddPostScreen() {
           )}
         </TouchableOpacity>
 
-        {/* --- Caption input field with visible placeholder --- */}
         <TextInput
           style={styles.captionInput}
           placeholder="Add a caption"
@@ -77,33 +106,25 @@ export default function AddPostScreen() {
           onChangeText={setCaption}
         />
 
-        {/* --- Green Save button --- */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save</Text>
-        </TouchableOpacity>
-
-        {/* --- Reset button underneath --- */}
-        <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
-          <Text style={styles.resetButtonText}>Reset</Text>
+        <TouchableOpacity
+          style={[styles.saveButton, loading && { opacity: 0.7 }]}
+          onPress={handleSave}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Post</Text>
+          )}
         </TouchableOpacity>
       </View>
     </TouchableWithoutFeedback>
   );
 }
 
-// --- Stylesheet for layout and appearance ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 20,
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
+  title: { fontSize: 24, fontWeight: '700', color: '#000', marginBottom: 20 },
   imagePicker: {
     width: '100%',
     height: 250,
@@ -115,15 +136,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     backgroundColor: '#f9f9f9',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
-  imagePlaceholder: {
-    color: '#666',
-    fontSize: 16,
-  },
+  image: { width: '100%', height: '100%', borderRadius: 10 },
+  imagePlaceholder: { color: '#666', fontSize: 16 },
   captionInput: {
     width: '100%',
     borderWidth: 1,
@@ -134,28 +148,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontSize: 16,
     color: '#000',
-    backgroundColor: '#fff',
   },
   saveButton: {
     backgroundColor: 'green',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 10,
   },
   saveButtonText: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  resetButton: {
-    backgroundColor: '#eee',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    color: '#333',
     fontWeight: '600',
     fontSize: 16,
   },
