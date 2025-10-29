@@ -13,11 +13,15 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { storage, db } from '../../firebaseConfig';
 import { useAuth } from '../../AuthProvider';
 
-export default function AddPostScreen() {
+type AddPostScreenProps = {
+  onPostAdded?: (newPost: QueryDocumentSnapshot<DocumentData>) => void; // callback to push post to feed
+};
+
+export default function AddPostScreen({ onPostAdded }: AddPostScreenProps) {
   const { user } = useAuth();
   const [image, setImage] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -55,28 +59,39 @@ export default function AddPostScreen() {
     setLoading(true);
 
     try {
-      // Convert image to blob
       const response = await fetch(image);
       const blob = await response.blob();
 
-      // Upload to Firebase Storage
       const imageRef = ref(storage, `posts/${user.uid}_${Date.now()}.jpg`);
       await uploadBytes(imageRef, blob);
-
-      // Get download URL
       const downloadURL = await getDownloadURL(imageRef);
 
-      // Add post to Firestore
-      await addDoc(collection(db, 'posts'), {
+      const docRef = await addDoc(collection(db, 'posts'), {
         imageUrl: downloadURL,
         caption,
         createdAt: serverTimestamp(),
+        createdAtMillis: Date.now(),
         createdBy: user.uid,
       });
 
       Alert.alert('Success', 'Post uploaded successfully!');
       setImage(null);
       setCaption('');
+
+      // ✅ Push new post to HomeScreen instantly
+      if (onPostAdded) {
+        onPostAdded({
+          id: docRef.id,
+          data: () => ({
+            imageUrl: downloadURL,
+            caption,
+            createdAt: { toMillis: () => Date.now() },
+            createdAtMillis: Date.now(),
+            createdBy: user.uid,
+          }),
+        } as QueryDocumentSnapshot<DocumentData>);
+      }
+
     } catch (error: any) {
       console.error('Upload error:', error);
       Alert.alert('Upload failed', error.message || 'Unknown error');
