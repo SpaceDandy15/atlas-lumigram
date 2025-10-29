@@ -1,4 +1,3 @@
-// app/(tabs)/home-screen.tsx
 import React, { useState, useCallback } from "react";
 import { View, Text, Image, Alert, StyleSheet, RefreshControl } from "react-native";
 import { FlashList } from "@shopify/flash-list";
@@ -103,7 +102,7 @@ export default function HomeScreen() {
   const renderItem = ({ item }: { item: QueryDocumentSnapshot<DocumentData> }) => {
     const data = item.data();
 
-    // ✅ JS function for double-tap
+    //JS function for double-tap
     const handleDoubleTap = async () => {
       if (!user) return Alert.alert("Not signed in", "Please log in to favorite posts.");
       try {

@@ -1,4 +1,3 @@
-// app/(tabs)/add-post-screen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -92,6 +91,12 @@ export default function AddPostScreen({ onPostAdded }: AddPostScreenProps) {
     }
   };
 
+  const handleReset = () => {
+    setImage(null);
+    setCaption('');
+    setLoading(false); // reset loading so Post button becomes active
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
@@ -111,12 +116,21 @@ export default function AddPostScreen({ onPostAdded }: AddPostScreenProps) {
         />
 
         <TouchableOpacity
-          style={[styles.saveButton, (loading || !image) && { opacity: 0.6 }]}
+          style={[styles.saveButton, loading && { opacity: 0.6 }]}
           onPress={handleSave}
-          disabled={loading || !image}
+          disabled={loading}
         >
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Post</Text>}
         </TouchableOpacity>
+
+        {/* Reset button */}
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleReset}
+        >
+          <Text style={styles.resetButtonText}>Reset</Text>
+        </TouchableOpacity>
+
       </View>
     </TouchableWithoutFeedback>
   );
@@ -129,6 +143,8 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%', borderRadius: 10 },
   imagePlaceholder: { color: '#666', fontSize: 16 },
   captionInput: { width: '100%', borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 20, fontSize: 16, color: '#000' },
-  saveButton: { backgroundColor: 'green', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  saveButton: { backgroundColor: 'green', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
   saveButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  resetButton: { backgroundColor: '#888', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  resetButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });
