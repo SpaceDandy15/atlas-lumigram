@@ -1,87 +1,172 @@
-import React from 'react';
-import { View, Text, Image, Alert, StyleSheet } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+// app/(tabs)/favorites.tsx
+import React, { useState, useCallback } from "react";
+import { View, Text, Image, Alert, StyleSheet, RefreshControl } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import { useFocusEffect } from "@react-navigation/native";
+import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from 'react-native-gesture-handler';
-import { favoritesFeed } from '@/placeholder'; // Use favorites feed data
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  startAfter,
+  getDocs,
+  DocumentData,
+  QueryDocumentSnapshot,
+  QuerySnapshot,
+} from "firebase/firestore";
+import { db } from "../../firebaseConfig";
+import { useAuth } from "../../AuthProvider";
+
+const PAGE_SIZE = 5;
 
 export default function FavoritesScreen() {
-  // Function to render each image item
-  const renderItem = ({ item }: { item: typeof favoritesFeed[0] }) => {
-    // --- Long press gesture ---
+  const { user } = useAuth();
+  const [favorites, setFavorites] = useState<QueryDocumentSnapshot<DocumentData>[]>([]);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reachedEnd, setReachedEnd] = useState(false);
+  const [visibleCaptionId, setVisibleCaptionId] = useState<string | null>(null);
+
+  // Fetch first page or refresh
+  const fetchFavorites = useCallback(async (refresh = false) => {
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const q = query(
+        collection(db, "favorites"),
+        where("userId", "==", user?.uid),
+        orderBy("createdAtMillis", "desc"),
+        limit(PAGE_SIZE)
+      );
+
+      const snapshot: QuerySnapshot<DocumentData> = await getDocs(q);
+
+      if (!snapshot.empty) {
+        setFavorites(snapshot.docs);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        setReachedEnd(snapshot.docs.length < PAGE_SIZE);
+      } else {
+        setFavorites([]);
+        setReachedEnd(true);
+      }
+    } catch (error: any) {
+      console.error("Error fetching favorites:", error);
+      Alert.alert("Error", "Could not load favorites.");
+    } finally {
+      setLoading(false);
+      if (refresh) setRefreshing(false);
+    }
+  }, [user, loading]);
+
+  // Fetch next page
+  const fetchMoreFavorites = async () => {
+    if (loading || reachedEnd || !lastDoc) return;
+    setLoading(true);
+
+    try {
+      const nextQuery = query(
+        collection(db, "favorites"),
+        where("userId", "==", user?.uid),
+        orderBy("createdAtMillis", "desc"),
+        startAfter(lastDoc.data().createdAtMillis),
+        limit(PAGE_SIZE)
+      );
+
+      const snapshot = await getDocs(nextQuery);
+
+      if (!snapshot.empty) {
+        setFavorites(prev => [...prev, ...snapshot.docs]);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        if (snapshot.docs.length < PAGE_SIZE) setReachedEnd(true);
+      } else {
+        setReachedEnd(true);
+      }
+    } catch (error: any) {
+      console.error("Error fetching more favorites:", error);
+      Alert.alert("Error", "Could not fetch more favorites.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setLastDoc(null);
+    setReachedEnd(false);
+    fetchFavorites(true);
+  };
+
+  const renderItem = ({ item }: { item: QueryDocumentSnapshot<DocumentData> }) => {
+    const data = item.data();
+
     const longPress = Gesture.LongPress()
-      .runOnJS(true) // ensures it runs in JS thread
-      .onStart(() => {
-        Alert.alert('Caption', `Placeholder caption: ${item.caption}`);
-      });
-
-    // --- Double tap gesture ---
-    const doubleTap = Gesture.Tap()
-      .numberOfTaps(2)
-      .runOnJS(true)
-      .onStart(() => {
-        Alert.alert('Double tapped! (placeholder for favorite)');
-      });
-
-    // Combine gestures safely
-    const gesture = Gesture.Race(doubleTap, longPress);
+      .minDuration(400)
+      .onStart(() => setVisibleCaptionId(item.id));
 
     return (
-      <GestureDetector gesture={gesture}>
+      <GestureDetector gesture={longPress}>
         <View style={styles.item}>
-          <Image source={{ uri: item.image }} style={styles.image} />
-          <Text style={styles.caption}>{item.caption}</Text>
+          <Image source={{ uri: data.imageUrl }} style={styles.image} />
+          {visibleCaptionId === item.id && (
+            <View style={styles.captionOverlay}>
+              <Text style={styles.captionText}>{data.caption}</Text>
+            </View>
+          )}
         </View>
       </GestureDetector>
     );
   };
 
+  // Refresh when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchFavorites(true);
+    }, [fetchFavorites])
+  );
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Favorites</Text>
-
-        <FlashList
-          data={favoritesFeed}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          estimatedItemSize={320}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+      <FlashList
+        data={favorites}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        estimatedItemSize={320}
+        onEndReached={fetchMoreFavorites}
+        onEndReachedThreshold={0.5}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      />
     </GestureHandlerRootView>
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 20,
-    paddingHorizontal: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 16,
-  },
   item: {
-    marginBottom: 16,
-    alignItems: 'center',
+    marginVertical: 10,
+    alignItems: "center",
+    position: "relative",
   },
   image: {
     width: 300,
     height: 300,
     borderRadius: 10,
   },
-  caption: {
-    marginTop: 8,
+  captionOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    padding: 8,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+  },
+  captionText: {
+    color: "white",
+    textAlign: "center",
     fontSize: 16,
-    color: '#000',
   },
 });

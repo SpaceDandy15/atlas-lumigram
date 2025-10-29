@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useCallback } from "react";
+// app/(tabs)/home-screen.tsx
+import React, { useState, useCallback } from "react";
 import { View, Text, Image, Alert, StyleSheet, RefreshControl } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import {
-  GestureHandlerRootView,
-  TapGestureHandler,
-  LongPressGestureHandler,
-  State
-} from "react-native-gesture-handler";
+import { useFocusEffect } from "@react-navigation/native";
+import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   collection,
   query,
   orderBy,
   limit,
   startAfter,
+  onSnapshot,
   getDocs,
+  addDoc,
+  serverTimestamp,
   DocumentData,
   QueryDocumentSnapshot,
-  Timestamp
+  QuerySnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { useAuth } from "../../AuthProvider";
@@ -32,89 +32,119 @@ export default function HomeScreen() {
   const [reachedEnd, setReachedEnd] = useState(false);
   const [visibleCaptionId, setVisibleCaptionId] = useState<string | null>(null);
 
-  const fetchPosts = useCallback(async (refresh = false) => {
-    if (loading) return;
-    setLoading(true);
-
-    try {
-      let q;
-      if (refresh || !lastDoc) {
-        q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(PAGE_SIZE));
-      } else {
-        const lastValue = lastDoc.data().createdAt?.toMillis
-          ? lastDoc.data().createdAt.toMillis()
-          : Date.now();
-        q = query(
-          collection(db, "posts"),
-          orderBy("createdAt", "desc"),
-          startAfter(lastValue),
-          limit(PAGE_SIZE)
-        );
+  // Real-time listener for first page
+  const subscribeToPosts = useCallback(() => {
+    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(PAGE_SIZE));
+    return onSnapshot(
+      q,
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        if (!snapshot.empty) {
+          setPosts(snapshot.docs);
+          setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+          setReachedEnd(snapshot.docs.length < PAGE_SIZE);
+        } else {
+          setPosts([]);
+          setReachedEnd(true);
+        }
+      },
+      (error) => {
+        console.error("Error listening to posts:", error);
+        Alert.alert("Error", "Could not load posts");
       }
+    );
+  }, []);
 
-      const snapshot = await getDocs(q);
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = subscribeToPosts();
+      return () => unsubscribe();
+    }, [subscribeToPosts])
+  );
 
-      if (snapshot.empty) {
-        setReachedEnd(true);
-      } else {
-        if (refresh) setPosts(snapshot.docs);
-        else setPosts(prev => [...prev, ...snapshot.docs]);
-
+  const fetchMorePosts = async () => {
+    if (loading || reachedEnd || !lastDoc) return;
+    setLoading(true);
+    try {
+      const nextQuery = query(
+        collection(db, "posts"),
+        orderBy("createdAt", "desc"),
+        startAfter(lastDoc),
+        limit(PAGE_SIZE)
+      );
+      const snapshot = await getDocs(nextQuery);
+      if (!snapshot.empty) {
+        setPosts((prev) => [...prev, ...snapshot.docs]);
         setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        if (snapshot.docs.length < PAGE_SIZE) setReachedEnd(true);
+      } else {
+        setReachedEnd(true);
       }
     } catch (error: any) {
-      console.error("Error fetching posts:", error);
-      Alert.alert("Error", "Could not load posts");
+      console.error("Error fetching more posts:", error);
     } finally {
       setLoading(false);
-      if (refresh) setRefreshing(false);
     }
-  }, [lastDoc, loading]);
-
-  useEffect(() => {
-    fetchPosts(true);
-  }, []);
+  };
 
   const handleRefresh = () => {
     setRefreshing(true);
     setLastDoc(null);
     setReachedEnd(false);
-    fetchPosts(true);
-  };
-
-  const handleEndReached = () => {
-    if (!reachedEnd) fetchPosts();
+    subscribeToPosts();
+    setRefreshing(false);
   };
 
   const handleNewPost = (newPost: QueryDocumentSnapshot<DocumentData>) => {
-    // Prepend the new post to the feed
-    setPosts(prev => [newPost, ...prev]);
+    setPosts((prev) => [newPost, ...prev]);
+    setLastDoc(null);
+    setReachedEnd(false);
   };
 
   const renderItem = ({ item }: { item: QueryDocumentSnapshot<DocumentData> }) => {
     const data = item.data();
+
+    // ✅ JS function for double-tap
+    const handleDoubleTap = async () => {
+      if (!user) return Alert.alert("Not signed in", "Please log in to favorite posts.");
+      try {
+        await addDoc(collection(db, "favorites"), {
+          userId: user.uid,
+          postId: item.id,
+          imageUrl: data.imageUrl,
+          caption: data.caption,
+          createdAt: serverTimestamp(),
+          createdAtMillis: Date.now(),
+        });
+        Alert.alert("Added to Favorites!");
+      } catch (error) {
+        console.error("Error adding favorite:", error);
+        Alert.alert("Error", "Could not add favorite.");
+      }
+    };
+
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .runOnJS(true)
+      .onStart(handleDoubleTap);
+
+    const longPress = Gesture.LongPress()
+      .minDuration(400)
+      .runOnJS(true)
+      .onStart(() => setVisibleCaptionId(item.id));
+
+    const gesture = Gesture.Race(doubleTap, longPress);
+
     return (
-      <LongPressGestureHandler
-        onHandlerStateChange={({ nativeEvent }) => {
-          if (nativeEvent.state === State.ACTIVE) setVisibleCaptionId(item.id);
-          else if (nativeEvent.state === State.END) setVisibleCaptionId(null);
-        }}
-        minDurationMs={400}
-      >
-        <TapGestureHandler
-          numberOfTaps={2}
-          onActivated={() => Alert.alert("Double tapped!")}
-        >
-          <View style={styles.item}>
-            <Image source={{ uri: data.imageUrl }} style={styles.image} />
-            {visibleCaptionId === item.id && (
-              <View style={styles.captionOverlay}>
-                <Text style={styles.captionText}>{data.caption}</Text>
-              </View>
-            )}
-          </View>
-        </TapGestureHandler>
-      </LongPressGestureHandler>
+      <GestureDetector gesture={gesture}>
+        <View style={styles.item}>
+          <Image source={{ uri: data.imageUrl }} style={styles.image} />
+          {visibleCaptionId === item.id && (
+            <View style={styles.captionOverlay}>
+              <Text style={styles.captionText}>{data.caption}</Text>
+            </View>
+          )}
+        </View>
+      </GestureDetector>
     );
   };
 
@@ -125,7 +155,7 @@ export default function HomeScreen() {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         estimatedItemSize={320}
-        onEndReached={handleEndReached}
+        onEndReached={fetchMorePosts}
         onEndReachedThreshold={0.5}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       />
